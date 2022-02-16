@@ -9,18 +9,55 @@ const PORT = process.env.PORT || 8080
 
 //=============================Main Page!===============================
 app.get("/", (req, res) => {
+  try{
+  if (req.protocol == 'http:') {
+    res.redirect="https://plsh.f5.si?message=httpからアクセスしてたので自動的にhttpsページにリダイレクトされました。&Style=Notice"
+  }
+  let color
+  if(req.query.style === "Error") color = "is-danger"
+  if(req.query.style === "Notice") color = "is-link"
   if(req.query.message){
     res.send(`
-    <title>しょーと</title>
-    Error : ${req.query.message}<br>
-    <h1>plsh.f5.si</h1>
-    <h1>高速で日本製の短縮URLサービス</h1>
-    <br>
-    <h2>/c?u=< Url >で作成(https://は不要です) <br>
-     /s?q=< 作成されたコード > で転送 </h2>
+    <!DOCTYPE html>
+    <html>
+     <head>
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.3/css/bulma.min.css">
+      <title>しょーと</title>
+     </head>
+    <body>
+     <section class="section">
+      <div class="notification ${color}" >
+       <strong>${req.query.message}</strong>
+      </div>
+
+      <h1 class="title">plsh.f5.si</h1>
+      <p class="subtitle">高速で日本製の短縮URLサービス</p>
+      <h2>/c?u=< Url >で作成(https://は不要です) <br>
+      /s?q=< 作成されたコード > で転送 </h2>
+     </section>
+    </body>
+   </html>
      `)
   }
-  res.send(`<title>しょーと</title><h1>plsh.f5.si</h1><h1>高速で日本製の短縮URLサービス</h1><br><h2>/c?u=< Url >で作成(https://は不要です) <br> /s?q=< 作成されたコード > で転送 </h2>`)
+  res.send(`    
+  <!DOCTYPE html>
+    <html>
+     <head>
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.3/css/bulma.min.css">
+      <title>しょーと</title>
+     </head>
+    <body>
+     <section class="section">
+      <h1 class="title">plsh.f5.si</h1>
+      <p class="subtitle">高速で日本製の短縮URLサービス</p>
+      <h2>/c?u=< Url >で作成(https://は不要です) <br>
+      /s?q=< 作成されたコード > で転送 </h2>
+     </section>
+    </body>
+   </html>`)
+  }catch(e){}
 })
 
 
@@ -33,13 +70,19 @@ app.get("/s",async (req,res) => {
   if(!req.query.q) return res.redirect("/")
   else {
     const redirecturl = await shurl.get(req.query.q)
-    if(!redirecturl) return res.redirect("/?message=notfoundpage")
+    const warn = await shurl.get(`${req.query.q}_warn`)
+    if(warn){
+      res.send('<title>Block by Plsh「 S 」System</title><h1>まって！<br>あなたがアクセスしようとしているのは危険と分類されたコードです。<br>あなたを守るため、この先に連れていくことはできません。</h1>')
+    }
+    else {
+    if(!redirecturl) return res.redirect("/?message=ページが見つかりません。&style=Error")
     let check = redirecturl.indexOf("https://")
     if(check = -1){
       res.redirect("https://"+redirecturl)
     }
     res.redirect(redirecturl)
       }
+    }
   }catch(e){
     console.log(e.message)
   }
@@ -69,7 +112,7 @@ app.get("/a/c",async (req,res) => {
 })
 //=============================Create Redirect Url =====================
 app.get("/c", (req,res) => {
-  if(!req.query.u) return res.redirect("/")
+  if(!req.query.u) return res.redirect("/?message=使い方 : /c?u=example.com＆cn=お好みで&style=Notice")
   
   else {
   if(!req.query.cn){
@@ -99,6 +142,27 @@ app.get("/c", (req,res) => {
   }
 })
 //=============================Delete Redirect==========================
+app.get("/warn",(req,res) => {
+  if(req.query.warn){
+    var warnurl = req.query.warn
+    shurl.get(warnurl).then(v => {
+      if(!v) return res.send('<h3>その短縮IDは存在しないぞ？</h3>')
+      shurl.set(`${warnurl}_warn`, "危険")
+      res.send('設定完了')
+    })
+  }
+  if(req.query.unwarn){
+    var warnurl = req.query.unwarn
+    shurl.get(warnurl).then(v => {
+      if(!v) return res.send('<h3>その短縮IDは存在しないぞ？</h3>')
+      shurl.delete(`${warnurl}_warn`)
+      res.send('設定完了')
+    })
+  }
+  if(!req.query){
+    res.send('<h1>短縮URL設定</h1><br><h2>短縮URLの危険設定 Query in ?warn=code</br>解除 Query in ?unwarn=code')
+  }
+})
 app.get("/d", (req,res) => {
   if(!req.query.c) return res.redirect('/')
   const checksitaurl = shurl.get(req.query.c)
@@ -113,7 +177,7 @@ app.get("/su", (req,res) => {
   res.send('<h1> ok </h1>')
 })
 app.get("/ok",(req,res) => {
-  if(!req.query.url) return res.redirect("/")
+  if(!req.query.url) return res.redirect("/?message=Queryが空です。&Style=Error")
   else {
     const url = req.query.url
     const mazinourl = "https://plsh.f5.si/s?q="+url
