@@ -1,0 +1,81 @@
+<html lang="ja">
+    <head>
+        <meta charset="utf-8">
+        <title>Performance Monitor</title>
+        <script type="text/javascript" src="https://d3js.org/d3.v6.min.js"></script> 
+    </head>
+    <body>
+        <div id="monitor1" style="float:left;"></div>
+        <div id="monitor2" style="float:left;"></div>
+        <div id="monitor3" style="float:left;"></div>
+        <script type="text/javascript">
+            class performanceMonitor {
+                constructor(select, width, height, url) {
+                    const margin = {'top': 10, 'bottom':10, 'left':40, 'right': 40};
+                    const history_max = 100;
+                    this.width = width;
+                    this.height = height;
+                    this.url = url;
+                    this.items = {};
+                    this.svg = d3.select(select).append("svg").attr("width", width).attr("height", height);
+                    this.yScale = d3.scaleLinear().domain([0, 100]).range([height - margin.bottom, margin.top]);
+                    this.xScale = d3.scaleLinear().domain([0, history_max]).range([width - margin.right, margin.left]);
+                    this.cScale = d3.scaleOrdinal(d3.schemePaired);
+                    this.line = d3.line().x((d, i) => this.xScale(i)).y((d, i) => this.yScale(d));
+                    // グラフの背景
+                    this.svg.append("rect").attr("fill","#F8F8F8").attr("stroke","#000000")
+                        .attr("x", this.xScale(100)).attr("width", this.xScale(0)-this.xScale(100))
+                        .attr("y", this.yScale(100)).attr("height", this.yScale(0)-this.yScale(100));
+                    // 左右にY軸表示
+                    this.svg.append("g").attr("class", "axis axis-l").attr("transform", `translate(${margin.left},0)`)
+                        .call(d3.axisLeft(this.yScale).ticks(10));
+                    this.svg.append("g").attr("class", "axis axis-r").attr("transform", `translate(${width - margin.right},0)`)
+                        .call(d3.axisRight(this.yScale).ticks(10));
+                    // プラットフォームの表示
+                    this.platform = this.svg.append("text").attr("x",65).attr("y",40).attr("font-size","16px");
+                }
+                update() {
+                    let parent = this;
+                    fetch(this.url).then(res => res.json()).then(data => parent.draw(data));
+                }
+                draw(data) {
+                    // プラットフォームテキストの更新
+                    this.platform.text(data.platform);
+                    // アイテム数分繰り返し
+                    for(let item in data.items) {
+                        if ((item in this.items) == false) {
+                            // 初回のみsvgにpathを追加
+                            let index = Object.keys(this.items).length;
+                            let offset_y = 60 + 16 * index;
+                            this.items[item] = {};
+                            this.items[item].color = this.cScale(index);
+                            this.items[item].path = this.svg.append("path");                            
+                            this.items[item].line = this.svg.append("line")
+                                .attr("x1",65).attr("x2",75).attr("y1",offset_y).attr("y2",offset_y)
+                                .attr("stroke-width",2).attr("stroke",this.items[item].color);
+                            this.items[item].text = this.svg.append("text").
+                                attr("x",80).attr("y",offset_y).attr("font-size","10px");
+                        }
+                        // データの更新
+                        this.items[item].path.datum(data.items[item].history)
+                            .attr("fill", "none")
+                            .attr("stroke", this.items[item].color)
+                            .attr("d", this.line);
+                        this.items[item].text.text(`${item} [${data.items[item].model}]  ${data.items[item].history[0]}%`);
+                    }
+                }
+            }
+            var monitor1 = new performanceMonitor("#monitor1", 600, 400, "http://192.168.11.12:12345/api/performance");
+            var monitor2 = new performanceMonitor("#monitor2", 600, 400, "http://192.168.11.5:12345/api/performance");
+            var monitor3 = new performanceMonitor("#monitor3", 600, 400, "http://192.168.11.11:12345/api/performance");
+
+            function updateDataset() {
+                monitor1.update();
+                monitor2.update();
+                monitor3.update();
+            }
+            setInterval(updateDataset,1000);
+            updateDataset();
+        </script>
+    </body>
+</html>
